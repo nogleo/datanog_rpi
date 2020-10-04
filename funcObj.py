@@ -1,7 +1,8 @@
+# %%
 import numpy as np
 from numpy.linalg import inv
 import scipy.optimize as op
-
+import matplotlib.pyplot as plt
 # %% Carregando dados
 caldata = np.load("calib/cal_1.npy")
 
@@ -31,10 +32,10 @@ acc_m = _aux
 for _i in range(3):
     _a_up = np.mean(acc[acc[:, _i] > 1800, _i])
     _a_down = np.mean(acc[acc[:, _i] < -1800, _i])
-    Ti[_i, _i-2] = np.mean(acc[acc[:, _i] > 1800, _i-2]) / \
-        np.mean(acc[acc[:, _i] > 1800, _i])
-    Ti[_i, _i-1] = np.mean(acc[acc[:, _i] > 1800, _i-1]) / \
-        np.mean(acc[acc[:, _i] > 1800, _i])
+    Ti[_i, _i-2] = np.arctan(np.mean(acc[acc[:, _i] > 1800, _i-2]) / \
+        np.mean(acc[acc[:, _i] > 1800, _i]))
+    Ti[_i, _i-1] = np.arctan(np.mean(acc[acc[:, _i] > 1800, _i-1]) / \
+        np.mean(acc[acc[:, _i] > 1800, _i]))
     k[_i, _i] = (_a_up - _a_down)/(2*9.81)
     b[_i] = (_a_up + _a_down)/2
 
@@ -68,3 +69,21 @@ resultado = op.minimize(funcObj, x, method='SLSQP')
 # %% Mostrnado o resultado de otimização
 
 print(resultado)
+
+# %%
+def transfunc(_data, X):
+    _data_out = np.zeros(_data.shape)
+    _NS = np.array([[X[0], 0, 0], [X[6], X[1], 0], [X[7], X[8], X[2]]])
+    _b = np.array([[X[3]], [X[4]], [X[5]]])
+    
+    for _i in range(len(_data)):
+        _data_out[_i] = (_NS@(_data[_i]-_b.T).T).reshape(3,)
+    
+    return _data_out
+
+
+# %%
+acc_cal = transfunc(ac0, resultado.x)
+
+
+plt.plot(acc_cal)
