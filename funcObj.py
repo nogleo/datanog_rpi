@@ -84,6 +84,6 @@ def transfunc(_data, X):
 
 # %%
 acc_cal = transfunc(ac0, resultado.x)
+accc_cal = transfunc(ac0, x)
 
-
-plt.plot(acc_cal)
+plt.plot(acc_cal-accc_cal)
