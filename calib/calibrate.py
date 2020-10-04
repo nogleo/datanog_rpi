@@ -9,13 +9,13 @@ import numpy as np
 from numpy.linalg import inv, norm
 from matplotlib.pyplot import plot
 
-caldata = np.load('cal_7.npy')
+caldata = np.load('cal_1.npy')
 
 
 
 gy0 = caldata[:, 0:3]
 ac0 = caldata[:, 3:6]
-acc = caldata[0:6000:10, 3:6]
+acc = caldata[0:-1:10, 3:6]
 gyr = caldata[0:6000:10, 0:3]
 k = np.zeros((3, 3))
 b = np.zeros((3, 1))
@@ -23,8 +23,8 @@ Ti = np.ones((3, 3))
 for _i in range(3):
     _a_up = np.mean(acc[acc[:, _i] > 1800, _i])
     _a_down = np.mean(acc[acc[:, _i] < -1800, _i])
-    Ti[_i, _i-2] = np.mean(acc[acc[:, _i] > 1800, _i-2])/np.mean(acc[acc[:, _i] > 1800, _i])
-    Ti[_i, _i-1] = np.mean(acc[acc[:, _i] > 1800, _i-1])/np.mean(acc[acc[:, _i] > 1800, _i])
+    Ti[_i, _i-2] = np.arctan(np.mean(acc[acc[:, _i] > 1800, _i-2])/np.mean(acc[acc[:, _i] > 1800, _i]))
+    Ti[_i, _i-1] = np.arctan(np.mean(acc[acc[:, _i] > 1800, _i-1])/np.mean(acc[acc[:, _i] > 1800, _i]))
     k[_i, _i] = (_a_up - _a_down)/(2*9.81)
     b[_i] = (_a_up + _a_down)/2
 
@@ -57,3 +57,5 @@ Acc = data[:, 4:7]
 Gyr = data[:, 1:4]
 Acc = (kT@(Acc.T-b)).T
 Gyr = k_g*(Gyr-b_g)
+
+

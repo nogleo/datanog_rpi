@@ -12,12 +12,12 @@ addr = dn.i2cscan()
 while ext != '0':
     ext = input('Positin and Press button: ')
     if ext == '1':
-        _count = 10000
+        _count = 100000*30
     else:
-        _count = 1000
+        _count = 100000*3
     i=0
     tf = time.perf_counter()
-    while i<s_count:
+    while i<_count:
         ti=time.perf_counter()
         if ti-tf>=1/1660:
             tf = ti

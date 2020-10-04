@@ -1,13 +1,25 @@
 import os, gc
 from struct import unpack
-
-
+import RPi.GPIO as GPIO
+import time
+from collections import deque
 import numpy as np
 import smbus
 import sched, time
 
 bus = smbus.SMBus(1)
+'''GPIO.setmode(GPIO.BCM)
+GPIO.setup(18,GPIO.OUT)
+GPIO.setup(23,GPIO.OUT)
+GPIO.setup(24,GPIO.OUT)
+GPIO.output(18,1)
+GPIO.output(23,1)
+GPIO.output(24,1)
 
+GPIO.setup(7,GPIO.IN)
+GPIO.setup(11,GPIO.IN)
+GPIO.setup(13,GPIO.IN)
+GPIO.setup(15,GPIO.IN)'''
 
 ODR_POWER_DOWN = 0
 ODR_12_5_HZ = 1
@@ -35,6 +47,7 @@ class DATANOG:
     def __init__(self, _base = 2, _scale = 0):
         self.__name__ = "DATANOG"
         self.sampfreq = 1660
+        self.led = (18, 23, 24)
 
         # device address for LSM6DS3.1 AS5600 LSM6DS3.2 ADC
         self.bus_addr = self.i2cscan()
@@ -88,9 +101,19 @@ class DATANOG:
             
         # ADC config    
         #bus.write_i2c_block_data(self.bus_addr[-3], 0x01, [0x2, 0x43])
-        
     
+    def led(self, _led = 0, _n = 1, _dur = 300, _blink = True):
+        if _blink == False:
+            GPIO.output(self.led[_led], not GPIO.input(self.led[_led]))
+        else:
+            for _i in range(_n):
+                GPIO.output(self.led[_led], 1)
+                time.sleep(_dur/1000)
+                GPIO.output(self.led[_led], 0)
+                time.sleep(_dur/1000)
 
+
+    
     
     
     def logdata(self, _data):  
@@ -106,13 +129,26 @@ class DATANOG:
         gc.collect()
         print(_filename)
 
+    '''
+    def get(self):
+        data0 = deque()
+        t0 = time.perf_counter()
+        tf = time.perf_counter()
+        while #wait button press#:
+            ti=time.perf_counter()
+            if ti-tf>=1/1660:
+                tf = ti
+                data0.append(self.pull())
     
-   
+        t1 = time.perf_counter()
+        print(t1-t0)
+        dn.logdata(data0)
+        '''
 
        
-    #TODO: add ADC pull
+    
     def pull(self):
-        return bus.read_i2c_block_data(0x36,0xE,2)+bus.read_i2c_block_data(self.bus_addr[-1],0x22,12)+bus.read_i2c_block_data(self.bus_addr[-2],0x22,12)+bus.read_i2c_block_data(self.bus_addr[-3],0x0,2)
+        return bus.read_i2c_block_data(0x36,0xE,2)+bus.read_i2c_block_data(self.bus_addr[-1],0x22,12)#+bus.read_i2c_block_data(self.bus_addr[-2],0x22,12)+bus.read_i2c_block_data(self.bus_addr[-3],0x0,2)
     
     def pullcalib(self, _addr):
         return bus.read_i2c_block_data(_addr,0x22,12)
