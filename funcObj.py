@@ -6,20 +6,20 @@ import matplotlib.pyplot as plt
 # %% Carregando dados
 caldata = np.load("calib/cal_1.npy")
 
-# %% Definindo variáveis para cálculo
-gravity = 9.81              # Gravidade usada na otimização
-NSamplesMesure = 300000     # Número de amostras medidas em cada posição
 
 # %% Disovendo arquivo de medição
 gy0 = caldata[:, 0:3]       # Serando as rotações
 ac0 = caldata[:, 3:6]       # Separando as acelerações
-acc = caldata[0:-1, 3:6]
+acc = caldata[0:-1:25, 3:6]
 gyr = caldata[0:-1, 0:3]
 k = np.zeros((3, 3))        # Criado a matriz dos fatores de escala
 b = np.zeros((3, 1))        # Criando o vetor de Bias (offset)
 Ti = np.ones((3, 3))        # Criando a matriz de desalinhamento do sensor
 _aux = np.zeros((6, 3))
 
+# %% Definindo variáveis para cálculo
+gravity = 9.81              # Gravidade usada na otimização
+NSamplesMesure = len(acc)//6    # Número de amostras medidas em cada posição
 # %% Realizando a média no tempo de cada posição medida
 for _i in range(6):
     for _j in range(3):
@@ -71,7 +71,7 @@ resultado = op.minimize(funcObj, x, method='SLSQP')
 print(resultado)
 
 # %%
-def transfunc(_data, X):
+def transcal(_data, X):
     _data_out = np.zeros(_data.shape)
     _NS = np.array([[X[0], 0, 0], [X[6], X[1], 0], [X[7], X[8], X[2]]])
     _b = np.array([[X[3]], [X[4]], [X[5]]])
@@ -83,7 +83,7 @@ def transfunc(_data, X):
 
 
 # %%
-acc_cal = transfunc(ac0, resultado.x)
-accc_cal = transfunc(ac0, x)
+acc_cal = transcal(ac0, resultado.x)
+accc_cal = transcal(ac0, x)
 
 plt.plot(acc_cal-accc_cal)

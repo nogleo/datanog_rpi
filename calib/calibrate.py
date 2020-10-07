@@ -15,8 +15,8 @@ caldata = np.load('cal_1.npy')
 
 gy0 = caldata[:, 0:3]
 ac0 = caldata[:, 3:6]
-acc = caldata[0:-1:10, 3:6]
-gyr = caldata[0:6000:10, 0:3]
+acc = caldata[0:-1:25, 3:6]
+gyr = caldata[0:-1:25, 0:3]
 k = np.zeros((3, 3))
 b = np.zeros((3, 1))
 Ti = np.ones((3, 3))

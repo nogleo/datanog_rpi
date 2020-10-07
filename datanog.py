@@ -4,8 +4,10 @@ import RPi.GPIO as GPIO
 import time
 from collections import deque
 import numpy as np
+from numpy.linalg import norm, inv
 import smbus
 import sched, time
+import json
 
 bus = smbus.SMBus(1)
 '''GPIO.setmode(GPIO.BCM)
@@ -153,6 +155,62 @@ class DATANOG:
     def pullcalib(self, _addr):
         return bus.read_i2c_block_data(_addr,0x22,12)
     
-
-
-
+    def calibrate(self):
+        _sensname = input('Connnect sensor and name it: ')
+        _sensor = {'name': _sensname}
+        self._caldata = []
+        _addr = self.i2cscan()
+        print('Iniciando 6 pos calibration')
+        _nsamp = int(input('Number of Samples/Position: ') or 10000)
+        for _n in range(6):
+            input('Position {}'.format(_n+1))
+            i=0
+            tf = time.perf_counter()
+            while i<_nsamp:
+                ti=time.perf_counter()
+                if ti-tf>=1/1660:
+                    tf = ti
+                    i+=1
+                    self._caldata.append(self.pullcalib(_addr[-1]))
+        
+        self._aux = []
+        for _d in self._caldata:
+            self._aux.append(unpack('<hhhhhh',bytearray(_d)))
+        _data = np.array(self._aux)
+        self.acc_raw = _data[:,3:6]
+        self.gyr_raw = _data[:,0:3]
+        _sensor['acc_p'] = self.calibacc(self.acc_raw)
+        _sensor['gyr_p'] = self.calibgyr(self.gyr_raw)
+        
+        os.chdir('sensors')
+        os.mkdir(_sensor['name'])
+        os.chdir(_sensor['name'])
+        np.savez('gyr_param.npz', _sensor['gyr_p'])
+        np.savez('acc_param.npz', _sensor['acc_p'][0], _sensor['acc_p'][1])
+        
+        os.chdir('..')
+        os.chdir('..')
+        
+        return _sensor
+    
+    def calibacc(self, _accdata):
+        _k = np.zeros((3, 3))
+        _b = np.zeros((3, 1))
+        _Ti = np.ones((3, 3))
+        for _i in range(3):
+            _a_up = np.mean(norm(_accdata[_accdata[:, _i] > 1800, :],axis=1))
+            _a_down = np.mean(norm(_accdata[_accdata[:, _i] < -1800, :], axis=1))
+            _Ti[_i, _i-2] = np.arctan(np.mean(_accdata[_accdata[:, _i] > 1800, _i-2])/np.mean(_accdata[_accdata[:, _i] > 1800, _i]))
+            _Ti[_i, _i-1] = np.arctan(np.mean(_accdata[_accdata[:, _i] > 1800, _i-1])/np.mean(_accdata[_accdata[:, _i] > 1800, _i]))
+            _k[_i, _i] = (_a_up - _a_down)/(2*9.81)
+            _b[_i] = (_a_up + _a_down)/2
+        _kT = inv(_k.dot(inv(_Ti)))
+        
+        return _kT, _b
+    
+        
+    def calibgyr(self, _gyrdata):
+        _k = np.zeros((3, 3))
+        _b = np.mean(_gyrdata, axis=0)
+        
+        return _b
