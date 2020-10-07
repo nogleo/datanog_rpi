@@ -1,8 +1,9 @@
 # %%
-import numpy as np
+import autograd.numpy as np
 from numpy.linalg import inv
 import scipy.optimize as op
 import matplotlib.pyplot as plt
+import autograd
 # %% Carregando dados
 caldata = np.load("calib/cal_1.npy")
 
@@ -62,14 +63,6 @@ def funcObj(X):
 
     return summ
 
-
-# %% Realizando a otimização
-resultado = op.minimize(funcObj, x, method='SLSQP')
-
-# %% Mostrnado o resultado de otimização
-
-print(resultado)
-
 # %%
 def transcal(_data, X):
     _data_out = np.zeros(_data.shape)
@@ -81,9 +74,26 @@ def transcal(_data, X):
     
     return _data_out
 
+# %%
+jacF = autograd.jacobian(funcObj)
+hesF = autograd.hessian(funcObj)
+
+# %% Realizando a otimização
+resultado = op.minimize(funcObj, x, method='trust-ncg', jac=jacF, hess=hesF)
+
+# %% Mostrnado o resultado de otimização
+
+print(resultado)
+
+
 
 # %%
 acc_cal = transcal(ac0, resultado.x)
 accc_cal = transcal(ac0, x)
 
 plt.plot(acc_cal-accc_cal)
+plt.plot(acc_cal)
+
+
+
+# %%

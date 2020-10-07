@@ -46,8 +46,11 @@ GYRO_SCALE_1000DPS = 2
 GYRO_SCALE_2000DPS = 3
 
 class DATANOG:
-    def __init__(self, _base = 2, _scale = 0):
+    def __init__(self, _imunames = None ):
         self.__name__ = "DATANOG"
+        if _imunames is None:
+            _imunames.append(input('Name IMU 1: '))
+            _imunames.append(input('Name IMU 2: '))
         self.sampfreq = 1660
         self.led = (18, 23, 24)
 
@@ -75,7 +78,7 @@ class DATANOG:
         self.accodr = ODR_1_66_KHZ
         self.accscale = ACC_SCALE_16G
         self.gyroodr = ODR_1_66_KHZ
-        self.gyroscale = GYRO_SCALE_1000DPS
+        self.gyroscale = GYRO_SCALE_2000DPS
         # this will be a constant multiplier for the output data
         self._accscale = [1, 8, 2, 4]
         self.a_scaler = self._accscale[self.accscale]
