@@ -46,13 +46,12 @@ GYRO_SCALE_1000DPS = 2
 GYRO_SCALE_2000DPS = 3
 
 class DATANOG:
-    def __init__(self, _imunames = None ):
+    def __init__(self):
         self.__name__ = "DATANOG"
-        if _imunames is None:
-            _imunames.append(input('Name IMU 1: '))
-            _imunames.append(input('Name IMU 2: '))
+        
         self.sampfreq = 1660
         self.led = (18, 23, 24)
+        self._sensors = ['AS5600', '', '', 'ADS1015']
 
         # device address for LSM6DS3.1 AS5600 LSM6DS3.2 ADC
         self.bus_addr = self.i2cscan()
@@ -117,11 +116,12 @@ class DATANOG:
                 GPIO.output(self.led[_led], 0)
                 time.sleep(_dur/1000)
 
-
+    def transl(self, _datain, _param):
+        return _datain*_param
     
     
     
-    def logdata(self, _data):  
+    def logdata(self, _data):
         gc.collect()      
         _filename = 'log_'+str(len(os.listdir('data')))+'.npy'
         os.chdir('data')
@@ -164,12 +164,23 @@ class DATANOG:
         self._caldata = []
         _addr = self.i2cscan()
         print('Iniciando 6 pos calibration')
-        _nsamp = int(input('Number of Samples/Position: ') or 10000)
+        self._nsamp = int(input('Number of Samples/Position: ') or 10000)
         for _n in range(6):
             input('Position {}'.format(_n+1))
             i=0
             tf = time.perf_counter()
-            while i<_nsamp:
+            while i<self._nsamp:
+                ti=time.perf_counter()
+                if ti-tf>=1/1660:
+                    tf = ti
+                    i+=1
+                    self._caldata.append(self.pullcalib(_addr[-1]))
+        self._gsamps = int(input('Number of Samples/Rotation: ') or 2000)
+        for _n in range(0,6,2):
+            input('Rotate 90 deg around axis {}-{}'.format(_n+1,_n+2))
+            i=0
+            tf = time.perf_counter()
+            while i<self._gsamps:
                 ti=time.perf_counter()
                 if ti-tf>=1/1660:
                     tf = ti
@@ -180,17 +191,16 @@ class DATANOG:
         for _d in self._caldata:
             self._aux.append(unpack('<hhhhhh',bytearray(_d)))
         _data = np.array(self._aux)
-        self.acc_raw = _data[:,3:6]
+        self.acc_raw = _data[0:6*self._nsamp,3:6]
         self.gyr_raw = _data[:,0:3]
         _sensor['acc_p'] = self.calibacc(self.acc_raw)
         _sensor['gyr_p'] = self.calibgyr(self.gyr_raw)
         
-        os.chdir('sensors')
-        os.mkdir(_sensor['name'])
-        os.chdir(_sensor['name'])
-        np.savez('gyr_param.npz', _sensor['gyr_p'])
+        os.chdir('sensors')        
+        os.mkdir(_sensor['name']) or os.chdir(_sensor['name'])
+        np.savez('gyr_param.npz', _sensor['gyr_p'][0], _sensor['gyr_p'][1])
         np.savez('acc_param.npz', _sensor['acc_p'][0], _sensor['acc_p'][1])
-        
+        np.save('rawdata.npy', self._caldata)
         os.chdir('..')
         os.chdir('..')
         
@@ -214,6 +224,10 @@ class DATANOG:
         
     def calibgyr(self, _gyrdata):
         _k = np.zeros((3, 3))
-        _b = np.mean(_gyrdata, axis=0)
+        _b = np.mean(_gyrdata[0:6*self._nsamp], axis=0)
+        _kT = []
+        for _i in range(3):
+             _kT.append( 90/(np.mean(_gyrdata[6*self._nsamp+(_i*self._gsamps):6*self._nsamp+((_i+1)*self._gsamps)]/1660, axis=0)))
         
-        return _b
+        
+        return _kT, _b
