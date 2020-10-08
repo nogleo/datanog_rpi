@@ -3,7 +3,9 @@ from struct import unpack
 import RPi.GPIO as GPIO
 import time
 from collections import deque
-import numpy as np
+import autograd.numpy as np
+import scipy.optimize as op
+import autograd
 from numpy.linalg import norm, inv
 import smbus
 import sched, time
@@ -134,24 +136,7 @@ class DATANOG:
         gc.collect()
         print(_filename)
 
-    '''
-    def get(self):
-        data0 = deque()
-        t0 = time.perf_counter()
-        tf = time.perf_counter()
-        while #wait button press#:
-            ti=time.perf_counter()
-            if ti-tf>=1/1660:
-                tf = ti
-                data0.append(self.pull())
-    
-        t1 = time.perf_counter()
-        print(t1-t0)
-        dn.logdata(data0)
-        '''
-
-       
-    
+   
     def pull(self):
         return bus.read_i2c_block_data(0x36,0xE,2)+bus.read_i2c_block_data(self.bus_addr[-1],0x22,12)#+bus.read_i2c_block_data(self.bus_addr[-2],0x22,12)+bus.read_i2c_block_data(self.bus_addr[-3],0x0,2)
     
@@ -218,16 +203,47 @@ class DATANOG:
             _k[_i, _i] = (_a_up - _a_down)/(2*9.81)
             _b[_i] = (_a_up + _a_down)/2
         _kT = inv(_k.dot(inv(_Ti)))
-        
-        return _kT, _b
+        _param = np.append(np.append(np.append(_kT.diagonal(), _b.T), _kT[np.tril(_kT, -1) != 0]), _kT[np.triu(_kT, 1) != 0])
+        _opt = self.optnog(_param, _accdata, 9.81)
+        return _opt
     
         
     def calibgyr(self, _gyrdata):
         _k = np.zeros((3, 3))
-        _b = np.mean(_gyrdata[0:6*self._nsamp], axis=0)
+        _b = np.mean(_gyrdata[0:6*self._nsamp], axis=0).T
         _kT = []
         for _i in range(3):
              _kT.append( 90/(np.mean(_gyrdata[6*self._nsamp+(_i*self._gsamps):6*self._nsamp+((_i+1)*self._gsamps)]/1660, axis=0)))
         
+        _param = np.append(np.append(np.append(_kT.diagonal(), _b.T), _kT[np.tril(_kT, -1) != 0]), _kT[np.triu(_kT, 1) != 0])
+        _opt = self.optnog(_param, _gyrdata, 90)
+        return _opt
+    
+    def transl(self, _data, X):
+        _data_out = np.zeros(_data.shape)
+        _NS = np.array([[X[0], 0, 0], [X[6], X[1], 0], [X[7], X[8], X[2]]])
+        _b = np.array([[X[3]], [X[4]], [X[5]]])
         
-        return _kT, _b
+        for _i in range(len(_data)):
+            _data_out[_i] = (_NS@(_data[_i]-_b.T).T).reshape(3,)
+        
+        return _data_out
+
+    
+    def funcObj(self, X):
+        _NS = np.array([[X[0], X[6], X[7]], [X[8], X[1], X[9]], [X[10], X[11], X[2]]])
+        _b = np.array([[X[3]], [X[4]], [X[5]]])
+        _sum = 0
+        for u in self._datopt:
+            _sum += (self._G - np.linalg.norm(_NS@(u-_b.T).T))**2
+
+        return _sum
+    
+    def optnog(self, _X, _datopt, _G):
+        self._datopt = _datopt
+        self._G = _G
+        _jac = autograd.jacobian(self.funcObj)
+        _hes = autograd.hessian(self.funcObj)
+        _res = op.minimize(self.funcObj, _X, method='trust-ncg', jac=_jac, hess=_hes)
+        return _res.x
+    

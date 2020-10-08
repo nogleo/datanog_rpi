@@ -44,13 +44,13 @@ for _i in range(3):
 kT = inv(k.dot(inv(Ti)))
 
 # %% Organizando vetor a ser otimizado x = [Sx,Sy,Sz,bx,by,bz,phiyx,phizx,phizy]
-x = np.append(np.append(kT.diagonal(), b.T), kT[np.tril(kT, -1) != 0])
+x = np.append(np.append(np.append(kT.diagonal(), b.T), kT[np.tril(kT, -1) != 0]), kT[np.triu(kT, 1) != 0])
 
 # %% Função objetiva a ser otimizada
 
 
 def funcObj(X):
-    N_S = np.array([[X[0], 0, 0], [X[6], X[1], 0], [X[7], X[8], X[2]]])
+    N_S = np.array([[X[0], X[6], X[7]], [X[8], X[1], X[9]], [X[10], X[11], X[2]]])
 
     b = np.array([[X[3]], [X[4]], [X[5]]])
 
@@ -90,10 +90,10 @@ print(resultado)
 # %%
 acc_cal = transcal(ac0, resultado.x)
 accc_cal = transcal(ac0, x)
-
+# %%
+plt.figure()
 plt.plot(acc_cal-accc_cal)
+# %%
+plt.figure()
 plt.plot(acc_cal)
 
-
-
-# %%
