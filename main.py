@@ -16,7 +16,7 @@ while i<10000:
     
 t1 = time.perf_counter()
 print(t1-t0)
-dn.logdata(data0)
+dn.log(data0)
 
 
  

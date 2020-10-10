@@ -55,7 +55,7 @@ class DATANOG:
         self.sampfreq = 1660
         self.dt = 1/self.sampfreq
         self.led = (18, 23, 24)
-        self._sensors = ['AS5600', '', '', 'ADS1015']
+        self._sensors = ['AS5600', 'LSM6DS3-0', 'LSM6DS3-1', 'ADS1015']
 
         # device address for LSM6DS3.1 AS5600 LSM6DS3.2 ADC
         self.bus_addr = self.i2cscan()
@@ -114,10 +114,22 @@ class DATANOG:
                 GPIO.output(self.led[_led], 0)
                 time.sleep(_dur/1000)
 
-    def transl(self, _datain, _param):
-        return _datain*_param
-    
-    
+        
+    def log(self, _data):
+        gc.collect()      
+        _filename = 'log_'+str(len(os.listdir('data')))+'.npy'
+        _sensname = 'A1'
+        acc_p = np.load('./sensors/'+_sensname+'apm.npy')
+        gyr_p = np.load('./sensors/'+_sensname+'gpm.npy')        
+        os.chdir('data')
+        _file = []
+        for i in range(len(_data)):
+            _aux = np.array(unpack('>H',bytearray(_data[i][0:2]))+unpack('<hhhhhh',bytearray(_data[i][2:14])))
+            _file.append([_aux[0]*self.ang_sensitivity, self.transl(_aux[1:4], gyr_p), self.transl(_aux[4:7], acc_p)])   
+        np.save(_filename, _file)
+        os.chdir('..')
+        gc.collect()
+        print(_filename)
     
     def logdata(self, _data):
         gc.collect()      
@@ -176,21 +188,13 @@ class DATANOG:
         self.gyr_raw = _data[:,0:3]
         self.gyr_s = _data[0:6*self._nsamp,0:3]
         self.gyr_r = _data[6*self._nsamp:,0:3] 
-        os.chdir('sensors') 
-        try:
-            os.mkdir(_sensor['name'])
-        
-        except :
-            os.chdir(_sensor['name'])      
-        #os.mkdir(_sensor['name']) or os.chdir(_sensor['name'])
-        np.save('rawdata.npy', _data)
+        np.save('./sensors/'+_sensor['name']+'rawdata.npy', _data)
         gc.collect()
         _sensor['acc_p'] = self.calibacc(self.acc_raw)
         gc.collect()
         _sensor['gyr_p'] = self.calibgyr(self.gyr_raw)        
-        np.save('gyr_param.npy', _sensor['gyr_p'])
-        np.save('acc_param.npy', _sensor['acc_p'])
-        os.chdir('..')
+        np.save('./sensors/'+_sensor['name']+'gpm.npy', _sensor['gyr_p'])
+        np.save('./sensors/'+_sensor['name']+'apm.npy', _sensor['acc_p'])
         os.chdir('..')
         gc.collect()
         return _sensor
@@ -246,26 +250,24 @@ class DATANOG:
         _kT = np.diag([90,90,90])@inv(_k)
         
         _param = np.append(np.append(np.append(_kT.diagonal(), _b.T), _kT[np.tril(_kT, -1) != 0]), _kT[np.triu(_kT, 1) != 0])
-        _jac = autograd.jacobian(self.accObj)
-        _hes = autograd.hessian(self.accObj)
-        _res = op.minimize(self.accObj, _param, method='trust-ncg', jac=_jac, hess=_hes)
+        _jac = autograd.jacobian(self.gyrObj)
+        _hes = autograd.hessian(self.gyrObj)
+        _res = op.minimize(self.gyrObj, _param, method='trust-ncg', jac=_jac, hess=_hes)
         return _res.x
     
-    def gyrObj(Y):
+    def gyrObj(self, Y):
         _NS = np.array([[Y[0], Y[6], Y[7]], [Y[8], Y[1], Y[9]], [Y[10], Y[11], Y[2]]])
         _b = np.array([[Y[3]], [Y[4]], [Y[5]]])
         _sum = 0
         for _u in self.gyr_r:
-            _sum +=((_NS@(_u).T).reshape(3,)/1660)
+            _sum +=((_NS@(_u-_b).T)/1660)
         
         return (np.sum(self.rotation - np.abs(_sum)))**2
     
     def transl(self, _data, X):
-        _data_out = np.zeros(_data.shape)
         _NS = np.array([[X[0], X[6], X[7]], [X[8], X[1], X[9]], [X[10], X[11], X[2]]])
         _b = np.array([[X[3]], [X[4]], [X[5]]])
-        for _i in range(len(_data)):
-            _data_out[_i] = (_NS@(_data[_i]-_b.T).T).reshape(3,)
+        _data_out = (_NS@(_data-_b).T)
         
         return _data_out
 
