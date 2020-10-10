@@ -50,8 +50,10 @@ GYRO_SCALE_2000DPS = 3
 class DATANOG:
     def __init__(self):
         self.__name__ = "DATANOG"
-        
+        self.gravity = 9.81
+        self.rotation = 90
         self.sampfreq = 1660
+        self.dt = 1/self.sampfreq
         self.led = (18, 23, 24)
         self._sensors = ['AS5600', '', '', 'ADS1015']
 
@@ -73,18 +75,12 @@ class DATANOG:
     
     def settings(self):
          # linear acceleration sensitivity
-        self.acc_sensitivity = .061 * 1e-3 * 9.81 # mg/LSB
-        self.gyro_sensitivity = 4.375 * 1e-3 # mdps/LSB
         self.ang_sensitivity = 0.087890625  #deg/LSB
         self.accodr = ODR_1_66_KHZ
         self.accscale = ACC_SCALE_16G
         self.gyroodr = ODR_1_66_KHZ
         self.gyroscale = GYRO_SCALE_2000DPS
-        # this will be a constant multiplier for the output data
-        self._accscale = [1, 8, 2, 4]
-        self.a_scaler = self._accscale[self.accscale]
-        self._gyroscale = [2, 4, 8, 16]
-        self.g_scaler = self._gyroscale[self.gyroscale]
+        
 
         # ODR
         mask = (self.accodr << 4) | (self.accscale << 2) #| current_reg_data
@@ -178,17 +174,25 @@ class DATANOG:
         _data = np.array(self._aux)
         self.acc_raw = _data[0:6*self._nsamp,3:6]
         self.gyr_raw = _data[:,0:3]
+        self.gyr_s = _data[0:6*self._nsamp,0:3]
+        self.gyr_r = _data[6*self._nsamp:,0:3] 
+        os.chdir('sensors') 
+        try:
+            os.mkdir(_sensor['name'])
+        
+        except :
+            os.chdir(_sensor['name'])      
+        #os.mkdir(_sensor['name']) or os.chdir(_sensor['name'])
+        np.save('rawdata.npy', _data)
+        gc.collect()
         _sensor['acc_p'] = self.calibacc(self.acc_raw)
-        _sensor['gyr_p'] = self.calibgyr(self.gyr_raw)
-        
-        os.chdir('sensors')        
-        os.mkdir(_sensor['name']) or os.chdir(_sensor['name'])
-        np.savez('gyr_param.npz', _sensor['gyr_p'][0], _sensor['gyr_p'][1])
-        np.savez('acc_param.npz', _sensor['acc_p'][0], _sensor['acc_p'][1])
-        np.save('rawdata.npy', self._caldata)
+        gc.collect()
+        _sensor['gyr_p'] = self.calibgyr(self.gyr_raw)        
+        np.save('gyr_param.npy', _sensor['gyr_p'])
+        np.save('acc_param.npy', _sensor['acc_p'])
         os.chdir('..')
         os.chdir('..')
-        
+        gc.collect()
         return _sensor
     
     def calibacc(self, _accdata):
@@ -196,54 +200,76 @@ class DATANOG:
         _b = np.zeros((3, 1))
         _Ti = np.ones((3, 3))
         for _i in range(3):
-            _a_up = np.mean(norm(_accdata[_accdata[:, _i] > 1800, :],axis=1))
-            _a_down = np.mean(norm(_accdata[_accdata[:, _i] < -1800, :], axis=1))
+            _a_up = np.mean(_accdata[_accdata[:, _i] > 1800, :])
+            _a_down = np.mean(_accdata[_accdata[:, _i] < -1800, :])
             _Ti[_i, _i-2] = np.arctan(np.mean(_accdata[_accdata[:, _i] > 1800, _i-2])/np.mean(_accdata[_accdata[:, _i] > 1800, _i]))
             _Ti[_i, _i-1] = np.arctan(np.mean(_accdata[_accdata[:, _i] > 1800, _i-1])/np.mean(_accdata[_accdata[:, _i] > 1800, _i]))
-            _k[_i, _i] = (_a_up - _a_down)/(2*9.81)
+            _k[_i, _i] = (_a_up - _a_down)/(2*self.gravity)
             _b[_i] = (_a_up + _a_down)/2
         _kT = inv(_k.dot(inv(_Ti)))
+        _aux = np.zeros((6, 3))
+        for _i in range(6):
+            for _j in range(3):
+                _aux[_i, _j] = np.mean(_accdata[_i*self._nsamp:(_i+1)*self._nsamp, _j])
+
+        self.acc_m = _aux
         _param = np.append(np.append(np.append(_kT.diagonal(), _b.T), _kT[np.tril(_kT, -1) != 0]), _kT[np.triu(_kT, 1) != 0])
-        _opt = self.optnog(_param, _accdata, 9.81)
-        return _opt
+        _jac = autograd.jacobian(self.accObj)
+        _hes = autograd.hessian(self.accObj)
+        _res = op.minimize(self.accObj, _param, method='trust-ncg', jac=_jac, hess=_hes)
+        return _res.x
     
+   
+    
+    def accObj(self, X):
+        _NS = np.array([[X[0], X[6], X[7]], [X[8], X[1], X[9]], [X[10], X[11], X[2]]])
+        _b = np.array([[X[3]], [X[4]], [X[5]]])
+        _sum = 0
+        for u in self.acc_m:
+            _sum += (self.gravity - np.linalg.norm(_NS@(u-_b.T).T))**2
+
+        return _sum
         
     def calibgyr(self, _gyrdata):
-        _k = np.zeros((3, 3))
-        _b = np.mean(_gyrdata[0:6*self._nsamp], axis=0).T
-        _kT = []
+        _b = np.mean(self.gyr_s, axis=0).T
+        _dat = self.gyr_r - _b
+        _aux = np.zeros((3, 3))
         for _i in range(3):
-             _kT.append( 90/(np.mean(_gyrdata[6*self._nsamp+(_i*self._gsamps):6*self._nsamp+((_i+1)*self._gsamps)]/1660, axis=0)))
+            for _j in range(3):
+                _aux[_i, _j] = np.abs(np.sum((_dat[_i*self._gsamps:(_i+1)*self._gsamps, _j])*self.dt))
+
+        _k = np.zeros((3,3))
+        _k[:,0] = _aux[:,_aux[0].argmax()]
+        _k[:,1] = _aux[:,_aux[1].argmax()]
+        _k[:,2] = _aux[:,_aux[2].argmax()]
+
+        _kT = np.diag([90,90,90])@inv(_k)
         
         _param = np.append(np.append(np.append(_kT.diagonal(), _b.T), _kT[np.tril(_kT, -1) != 0]), _kT[np.triu(_kT, 1) != 0])
-        _opt = self.optnog(_param, _gyrdata, 90)
-        return _opt
+        _jac = autograd.jacobian(self.accObj)
+        _hes = autograd.hessian(self.accObj)
+        _res = op.minimize(self.accObj, _param, method='trust-ncg', jac=_jac, hess=_hes)
+        return _res.x
+    
+    def gyrObj(Y):
+        _NS = np.array([[Y[0], Y[6], Y[7]], [Y[8], Y[1], Y[9]], [Y[10], Y[11], Y[2]]])
+        _b = np.array([[Y[3]], [Y[4]], [Y[5]]])
+        _sum = 0
+        for _u in self.gyr_r:
+            _sum +=((_NS@(_u).T).reshape(3,)/1660)
+        
+        return (np.sum(self.rotation - np.abs(_sum)))**2
     
     def transl(self, _data, X):
         _data_out = np.zeros(_data.shape)
-        _NS = np.array([[X[0], 0, 0], [X[6], X[1], 0], [X[7], X[8], X[2]]])
+        _NS = np.array([[X[0], X[6], X[7]], [X[8], X[1], X[9]], [X[10], X[11], X[2]]])
         _b = np.array([[X[3]], [X[4]], [X[5]]])
-        
         for _i in range(len(_data)):
             _data_out[_i] = (_NS@(_data[_i]-_b.T).T).reshape(3,)
         
         return _data_out
 
     
-    def funcObj(self, X):
-        _NS = np.array([[X[0], X[6], X[7]], [X[8], X[1], X[9]], [X[10], X[11], X[2]]])
-        _b = np.array([[X[3]], [X[4]], [X[5]]])
-        _sum = 0
-        for u in self._datopt:
-            _sum += (self._G - np.linalg.norm(_NS@(u-_b.T).T))**2
-
-        return _sum
     
-    def optnog(self, _X, _datopt, _G):
-        self._datopt = _datopt
-        self._G = _G
-        _jac = autograd.jacobian(self.funcObj)
-        _hes = autograd.hessian(self.funcObj)
-        _res = op.minimize(self.funcObj, _X, method='trust-ncg', jac=_jac, hess=_hes)
-        return _res.x
+    
     
