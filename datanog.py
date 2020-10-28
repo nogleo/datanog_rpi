@@ -117,16 +117,21 @@ class DATANOG:
         
     def log(self, _data):
         gc.collect()      
-        _filename = 'log_'+str(len(os.listdir('data')))+'.npy'
-        _sensname = 'A1'
+        _filename = 'log_'+str(len(os.listdir('data')))
+        _sensname = 'imu00'
         acc_p = np.load('./sensors/'+_sensname+'apm.npy')
         gyr_p = np.load('./sensors/'+_sensname+'gpm.npy')        
         os.chdir('data')
-        _file = []
+        _ang = []
+        _gyr0 = []
+        _acc0 = []
+        
         for i in range(len(_data)):
             _aux = np.array(unpack('>H',bytearray(_data[i][0:2]))+unpack('<hhhhhh',bytearray(_data[i][2:14])))
-            _file.append([_aux[0]*self.ang_sensitivity, self.transl(_aux[1:4], gyr_p), self.transl(_aux[4:7], acc_p)])   
-        np.save(_filename, _file)
+            _ang.append(_aux[0]*self.ang_sensitivity)
+            _gyr0.append(self.transl(_aux[1:4], gyr_p))
+            _acc0.append(self.transl(_aux[4:7], acc_p))   
+        np.savez(_filename, _ang, _gyr0, _acc0)
         os.chdir('..')
         gc.collect()
         print(_filename)
