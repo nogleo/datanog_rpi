@@ -52,7 +52,7 @@ class DATANOG:
         self.__name__ = "DATANOG"
         self.gravity = 9.81
         self.rotation = 90
-        self.sampfreq = 1660
+        self.sampfreq = 3330
         self.dt = 1/self.sampfreq
         self.led = (18, 23, 24)
         self._sensors = ['AS5600', 'LSM6DS3-0', 'LSM6DS3-1', 'ADS1015']
@@ -76,7 +76,7 @@ class DATANOG:
     def settings(self):
          # linear acceleration sensitivity
         self.ang_sensitivity = 0.087890625  #deg/LSB
-        self.accodr = ODR_1_66_KHZ
+        self.accodr = ODR_3_33_KHZ
         self.accscale = ACC_SCALE_16G
         self.gyroodr = ODR_1_66_KHZ
         self.gyroscale = GYRO_SCALE_2000DPS
@@ -136,6 +136,21 @@ class DATANOG:
         gc.collect()
         print(_filename)
     
+    
+    def lograw(self, _data):
+        gc.collect()      
+        _filename = 'raw_'+str(len(os.listdir('data')))
+        os.chdir('data/raw')
+        _aux = []
+        
+        for i in range(len(_data)):
+            _aux.append(unpack('>H',bytearray(_data[i][0:2]))+unpack('<hhhhhh',bytearray(_data[i][2:14])))
+               
+        np.save(_filename, _aux)
+        os.chdir('../..')
+        gc.collect()
+        print(_filename)
+    
     def logdata(self, _data):
         gc.collect()      
         _filename = 'log_'+str(len(os.listdir('data')))+'.npy'
@@ -162,7 +177,7 @@ class DATANOG:
         self._caldata = []
         _addr = self.i2cscan()
         print('Iniciando 6 pos calibration')
-        self._nsamp = int(input('Number of Samples/Position: ') or 10000)
+        self._nsamp = int(input('Number of Samples/Position: ') or 5/self.dt)
         for _n in range(6):
             input('Position {}'.format(_n+1))
             i=0
@@ -173,7 +188,7 @@ class DATANOG:
                     tf = ti
                     i+=1
                     self._caldata.append(self.pullcalib(_addr[-1]))
-        self._gsamps = int(input('Number of Samples/Rotation: ') or 2000)
+        self._gsamps = int(input('Number of Samples/Rotation: ') or 1/self.dt)
         for _n in range(0,6,2):
             input('Rotate 90 deg around axis {}-{}'.format(_n+1,_n+2))
             i=0
@@ -271,8 +286,8 @@ class DATANOG:
     
     def transl(self, _data, X):
         _NS = np.array([[X[0], X[6], X[7]], [X[8], X[1], X[9]], [X[10], X[11], X[2]]])
-        _b = np.array([[X[3]], [X[4]], [X[5]]])
-        _data_out = (_NS@(_data-_b).T)
+        _b = X[3:6]
+        _data_out = (_NS@(_data-_b))
         
         return _data_out
 

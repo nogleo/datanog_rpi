@@ -14,11 +14,13 @@ import numpy as np
 import scipy
 from mpl_toolkits import mplot3d
 from scipy.signal import filtfilt, butter, buttord, spectrogram
-fs = 1660
-data = np.load('log_20.npz', allow_pickle=True)
+
+
+fs = 3330
+data = np.load('log_0.npz', allow_pickle=True)
 ang = data['arr_0']
-gyr0 = data['arr_1'][:,0,:]
-acc0 = data['arr_2'][:,0,:]
+gyr0 = data['arr_1']
+acc0 = data['arr_2']
 
 
 
@@ -28,7 +30,7 @@ t = np.linspace(0.0, N/fs, N)
 
 # %%
 # def PSD(data):
-#     _l = data.shape[0]
+#     _l = data.shape[0]plt.ion()
 #     if len(data.shape) == 1:
 #         data = data.reshape(_l, 1)
 #     _n = data.shape[1]
@@ -36,7 +38,7 @@ t = np.linspace(0.0, N/fs, N)
 #     d_p = np.zeros(data.shape)
 #     for i in range(_n):
 #         d_f[:, i] = scipy.fft.fft(data[:, i], _l)
-#         d_p[:, i] = d_f[:, i] * np.conj(d_f[:, i]) / _l
+#         d_p[:, i] = d_nd('Noisy', 'Denoised')f[:, i] * np.conj(d_f[:, i]) / _l
 #     return d_p[1:int(_l/2)+1]
 
 
@@ -72,22 +74,25 @@ def pulldata(_data):
 # %%
 gyr0f = pulldata(gyr0)
 acc0f = pulldata(acc0)
-angf = pulldata(ang)
+angf = pulldata(ang).reshape(N)
 
 vel0 = scipy.integrate.cumtrapz(acc0f, axis=0)
 
+g = np.linalg.norm(acc0f,axis=1)
+G = np.linalg.norm(acc0f,axis=1)
+
 rot0 = np.array([])        
 rot0 =  scipy.integrate.cumtrapz(gyr0f, axis=0)
-spect(acc0f[:, 0], 1660)
-spect(acc0f[:, 1], 1660)
-spect(acc0f[:, 2], 1660)
-spect(acc0[:, 0], 1660)
-spect(acc0[:, 1], 1660)
-spect(acc0[:, 2], 1660)
-# spect(gyr0[:, 0], 1660)
-# spect(gyr0[:, 1], 1660)
-# spect(gyr0[:, 2], 1660)
-# spect(ang, 1660)
+spect(acc0f[:, 0], fs)
+spect(acc0f[:, 1], fs)
+spect(acc0f[:, 2], fs)
+# spect(acc0[:, 0], fs)
+# spect(acc0[:, 1], fs)
+# spect(acc0[:, 2], fs)
+spect(gyr0f[:, 0], fs)
+spect(gyr0f[:, 1], fs)
+spect(gyr0f[:, 2], fs)
+spect(angf, fs)
 # spect(acc1[:, 0], 1660)
 # spect(acc1[:, 1], 1660)
 # spect(acc1[:, 2], 1660)
@@ -95,8 +100,7 @@ spect(acc0[:, 2], 1660)
 # spect(gyr1[:, 1], 1660)
 # spect(gyr1[:, 2], 1660)
 
-fig = figure(1,figsize=(2, 1))
-plt.legend('Noisy', 'Denoised')
+fig = figure(1)
 subplot(3, 1, 1)
 plot(acc0[:, 0])
 subplot(3, 1, 2)
@@ -109,8 +113,6 @@ subplot(3, 1, 2)
 plot(acc0f[:, 1])
 subplot(3, 1, 3)
 plot(acc0f[:, 2])
-plt.xlabel('Sample' )
-plt.title('Acceleration [m/s²]')
 plt.show()
 
 
