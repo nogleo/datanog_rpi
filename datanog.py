@@ -78,7 +78,7 @@ class DATANOG:
         self.ang_sensitivity = 0.087890625  #deg/LSB
         self.accodr = ODR_3_33_KHZ
         self.accscale = ACC_SCALE_16G
-        self.gyroodr = ODR_1_66_KHZ
+        self.gyroodr = ODR_3_33_KHZ
         self.gyroscale = GYRO_SCALE_2000DPS
         
 
@@ -118,7 +118,7 @@ class DATANOG:
     def log(self, _data):
         gc.collect()      
         _filename = 'log_'+str(len(os.listdir('data')))
-        _sensname = 'imu00'
+        _sensname = 'LSM6DSO-01'
         acc_p = np.load('./sensors/'+_sensname+'apm.npy')
         gyr_p = np.load('./sensors/'+_sensname+'gpm.npy')        
         os.chdir('data')
@@ -208,6 +208,7 @@ class DATANOG:
         self.gyr_raw = _data[:,0:3]
         self.gyr_s = _data[0:6*self._nsamp,0:3]
         self.gyr_r = _data[6*self._nsamp:,0:3] 
+        print('Data collection done... \n Calculating calibration values. Wait...')
         np.save('./sensors/'+_sensor['name']+'rawdata.npy', _data)
         gc.collect()
         _sensor['acc_p'] = self.calibacc(self.acc_raw)

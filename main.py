@@ -3,7 +3,7 @@ import datanog as nog
 import time
 from collections import deque
 dn = nog.DATANOG()
-fs = 3330
+fs = 3333
 dt = 1/fs
 
 data0 = deque()
@@ -18,6 +18,7 @@ while i<10000:
     
 t1 = time.perf_counter()
 print(t1-t0)
+dn.lograw(data0)
 dn.log(data0)
 
 

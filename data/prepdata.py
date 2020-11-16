@@ -15,14 +15,17 @@ import scipy
 from mpl_toolkits import mplot3d
 from scipy.signal import filtfilt, butter, buttord, spectrogram
 
-
+%matplotlib inline
 fs = 3330
-data = np.load('log_0.npz', allow_pickle=True)
+data = np.load('log_23.npz', allow_pickle=True)
 ang = data['arr_0']
 gyr0 = data['arr_1']
 acc0 = data['arr_2']
 
-
+# data = np.load('./raw/raw_20.npy')
+# ang = data[:,0]
+# gyr0 = data[:,1:4]
+# acc0 = data[:,4:7]
 
 N = len(ang)
 
@@ -43,7 +46,7 @@ t = np.linspace(0.0, N/fs, N)
 
 
 def PSD(_data):
-    _f, _dout = scipy.signal.welch(_data, nperseg=1660, fs=1660, axis=0, scaling='spectrum', average='mean',window='hann',)
+    _f, _dout = scipy.signal.welch(_data, nperseg=fs, fs=fs, axis=0, scaling='spectrum', average='mean',window='hann',)
     return _dout
 
 
@@ -162,7 +165,7 @@ plt.plot(acc0f[2000:3000,0])
 #%%
 dt = 1/fs
 f = (fs/N) * np.arange(1, N/2 + 1)
-f = range(831)
+f = range(int(fs/2)+1)
 Acc0f = PSD(acc0f)
 Acc0 = PSD(acc0)
 Gyr0 = PSD(gyr0)
