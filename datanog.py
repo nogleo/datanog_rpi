@@ -118,7 +118,7 @@ class DATANOG:
     def log(self, _data):
         gc.collect()      
         _filename = 'log_'+str(len(os.listdir('data')))
-        _sensname = 'LSM6DSO-01'
+        _sensname = 'imu1'
         acc_p = np.load('./sensors/'+_sensname+'apm.npy')
         gyr_p = np.load('./sensors/'+_sensname+'gpm.npy')        
         os.chdir('data')
@@ -184,23 +184,24 @@ class DATANOG:
             tf = time.perf_counter()
             while i<self._nsamp:
                 ti=time.perf_counter()
-                if ti-tf>=1/1660:
+                if ti-tf>=self.dt:
                     tf = ti
                     i+=1
                     self._caldata.append(self.pullcalib(_addr[-1]))
-        self._gsamps = int(input('Number of Samples/Rotation: ') or 1/self.dt)
+        self._gsamps = int(input('Number of Samples/Rotation: ') or 2/self.dt)
         for _n in range(0,6,2):
             input('Rotate 90 deg around axis {}-{}'.format(_n+1,_n+2))
             i=0
             tf = time.perf_counter()
             while i<self._gsamps:
                 ti=time.perf_counter()
-                if ti-tf>=1/1660:
+                if ti-tf>=self.dt:
                     tf = ti
                     i+=1
                     self._caldata.append(self.pullcalib(_addr[-1]))
         
         self._aux = []
+        print('Data collection done...')
         for _d in self._caldata:
             self._aux.append(unpack('<hhhhhh',bytearray(_d)))
         _data = np.array(self._aux)
@@ -208,8 +209,9 @@ class DATANOG:
         self.gyr_raw = _data[:,0:3]
         self.gyr_s = _data[0:6*self._nsamp,0:3]
         self.gyr_r = _data[6*self._nsamp:,0:3] 
-        print('Data collection done... \n Calculating calibration values. Wait...')
         np.save('./sensors/'+_sensor['name']+'rawdata.npy', _data)
+        print(_sensor['name']+'rawdata saved')
+        print('Calculating calibration parameters. Wait...')
         gc.collect()
         _sensor['acc_p'] = self.calibacc(self.acc_raw)
         gc.collect()
@@ -222,22 +224,23 @@ class DATANOG:
     
     def calibacc(self, _accdata):
         _k = np.zeros((3, 3))
-        _b = np.zeros((3, 1))
+        _b = np.zeros((3))
         _Ti = np.ones((3, 3))
-        for _i in range(3):
-            _a_up = np.mean(_accdata[_accdata[:, _i] > 1800, :])
-            _a_down = np.mean(_accdata[_accdata[:, _i] < -1800, :])
-            _Ti[_i, _i-2] = np.arctan(np.mean(_accdata[_accdata[:, _i] > 1800, _i-2])/np.mean(_accdata[_accdata[:, _i] > 1800, _i]))
-            _Ti[_i, _i-1] = np.arctan(np.mean(_accdata[_accdata[:, _i] > 1800, _i-1])/np.mean(_accdata[_accdata[:, _i] > 1800, _i]))
-            _k[_i, _i] = (_a_up - _a_down)/(2*self.gravity)
-            _b[_i] = (_a_up + _a_down)/2
-        _kT = inv(_k.dot(inv(_Ti)))
-        _aux = np.zeros((6, 3))
+        
+        self.acc_m = np.zeros((6, 3))
         for _i in range(6):
             for _j in range(3):
-                _aux[_i, _j] = np.mean(_accdata[_i*self._nsamp:(_i+1)*self._nsamp, _j])
+                self.acc_m[_i, _j] = np.mean(_accdata[_i*self._nsamp:(_i+1)*self._nsamp, _j])
 
-        self.acc_m = _aux
+        
+        for _i in range(3):
+            _max = self.acc_m[:,i].max(0)
+            _min = self.acc_m[:,i].min(0)
+            _k[i, i] = (_max - _min)/ (2*gravity)
+            _b[i] = (_max + _min)/2    
+            _Ti[i, i-2] = np.arctan(self.acc_m[self.acc_m[:,i].argmax(0),i-2] / _max)
+            _Ti[i, i-1] = np.arctan(self.acc_m[self.acc_m[:,i].argmax(0),i-1] / _max)
+        _kT = inv(_k.dot(inv(_Ti)))
         _param = np.append(np.append(np.append(_kT.diagonal(), _b.T), _kT[np.tril(_kT, -1) != 0]), _kT[np.triu(_kT, 1) != 0])
         _jac = autograd.jacobian(self.accObj)
         _hes = autograd.hessian(self.accObj)
@@ -281,7 +284,7 @@ class DATANOG:
         _b = np.array([[Y[3]], [Y[4]], [Y[5]]])
         _sum = 0
         for _u in self.gyr_r:
-            _sum +=((_NS@(_u-_b).T)/1660)
+            _sum +=((_NS@(_u-_b).T)*self.dt)
         
         return (np.sum(self.rotation - np.abs(_sum)))**2
     

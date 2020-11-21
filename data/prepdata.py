@@ -17,15 +17,15 @@ from scipy.signal import filtfilt, butter, buttord, spectrogram
 
 %matplotlib inline
 fs = 3330
-data = np.load('log_23.npz', allow_pickle=True)
+data = np.load('log_21.npz', allow_pickle=True)
 ang = data['arr_0']
 gyr0 = data['arr_1']
 acc0 = data['arr_2']
 
-# data = np.load('./raw/raw_20.npy')
-# ang = data[:,0]
-# gyr0 = data[:,1:4]
-# acc0 = data[:,4:7]
+data = np.load('./raw/raw_21.npy')
+ang = data[:,0]
+gyr0 = data[:,1:4]
+acc0 = data[:,4:7]
 
 N = len(ang)
 
@@ -81,7 +81,7 @@ angf = pulldata(ang).reshape(N)
 
 vel0 = scipy.integrate.cumtrapz(acc0f, axis=0)
 
-g = np.linalg.norm(acc0f,axis=1)
+g = np.linalg.norm(acc0,axis=1)
 G = np.linalg.norm(acc0f,axis=1)
 
 rot0 = np.array([])        
@@ -105,37 +105,37 @@ spect(angf, fs)
 
 fig = figure(1)
 subplot(3, 1, 1)
-plot(acc0[:, 0])
+plot(t, acc0[:, 0])
 subplot(3, 1, 2)
-plot(acc0[:, 1])
+plot(t, acc0[:, 1])
 subplot(3, 1, 3)
-plot(acc0[:, 2])
+plot(t, acc0[:, 2])
 subplot(3, 1, 1)
-plot(acc0f[:, 0])
+plot(t,  acc0f[:, 0])
 subplot(3, 1, 2)
-plot(acc0f[:, 1])
+plot(t,  acc0f[:, 1])
 subplot(3, 1, 3)
-plot(acc0f[:, 2])
+plot(t,  acc0f[:, 2])
 plt.show()
 
 
 figure(2)
 subplot(3, 1, 1)
-plot(gyr0[:, 0])
+plot(t,  gyr0[:, 0])
 subplot(3, 1, 2)
-plot(gyr0[:, 1])
+plot(t,  gyr0[:, 1])
 subplot(3, 1, 3)
-plot(gyr0[:, 2])
+plot(t,  gyr0[:, 2])
 subplot(3, 1, 1)
-plot(gyr0f[:, 0])
+plot(t,  gyr0f[:, 0])
 subplot(3, 1, 2)
-plot(gyr0f[:, 1])
+plot(t,  gyr0f[:, 1])
 subplot(3, 1, 3)
-plot(gyr0f[:, 2])
+plot(t,  gyr0f[:, 2])
 
 figure(3)
-plot(ang)
-plot(angf)
+plot(t,  ang)
+plot(t,  angf)
 
 
 # figure(4)
@@ -164,7 +164,7 @@ plt.plot(acc0f[2000:3000,0])
 
 #%%
 dt = 1/fs
-f = (fs/N) * np.arange(1, N/2 + 1)
+f = range(334)
 f = range(int(fs/2)+1)
 Acc0f = PSD(acc0f)
 Acc0 = PSD(acc0)
