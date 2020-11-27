@@ -13,37 +13,53 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 from mpl_toolkits import mplot3d
-from scipy.signal import filtfilt, butter, buttord, spectrogram
+from scipy.signal import filtfilt, butter, buttord, spectrogram, lfilter
+import pywt
 
-%matplotlib inline
+
 fs = 3330
-data = np.load('log_21.npz', allow_pickle=True)
+data = np.load('log_8.npz', allow_pickle=True)
 ang = data['arr_0']
 gyr0 = data['arr_1']
 acc0 = data['arr_2']
 
-data = np.load('./raw/raw_21.npy')
-ang = data[:,0]
-gyr0 = data[:,1:4]
-acc0 = data[:,4:7]
+# data = np.load('./raw/raw_21.npy')
+# ang = data[:,0]
+# gyr0 = data[:,1:4]
+# acc0 = data[:,4:7]
 
 N = len(ang)
 
 t = np.linspace(0.0, N/fs, N)
 
 # %%
-# def PSD(data):
-#     _l = data.shape[0]plt.ion()
-#     if len(data.shape) == 1:
-#         data = data.reshape(_l, 1)
-#     _n = data.shape[1]
-#     d_f = np.zeros(data.shape)
-#     d_p = np.zeros(data.shape)
-#     for i in range(_n):
-#         d_f[:, i] = scipy.fft.fft(data[:, i], _l)
-#         d_p[:, i] = d_nd('Noisy', 'Denoised')f[:, i] * np.conj(d_f[:, i]) / _l
-#     return d_p[1:int(_l/2)+1]
 
+def butter_bandpass(lowcut, highcut, fs, order=5):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    return b, a
+
+
+def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
+    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
+    y = filtfilt(b, a, data, axis=0, method='gust', irlen=1000)
+    return y
+
+# %%
+
+wacc = pywt.wavedec(acc0, 'haar',mode='zero', level=5 , axis=0)
+wcacc, freqs = pywt.cwt(acc0, np.arange(1, 301), 'gaus5')
+
+
+plt.figure(figsize=(10000,10000));
+plt.imshow(abs(wcacc), interpolation='bilinear', cmap='copper')
+plt.gca().invert_yaxis()
+plt.gca().set_xticks(t)
+plt.show()
+
+# %%
 
 def PSD(_data):
     _f, _dout = scipy.signal.welch(_data, nperseg=fs, fs=fs, axis=0, scaling='spectrum', average='mean',window='hann',)
@@ -51,7 +67,7 @@ def PSD(_data):
 
 
 def spect(timeDataP, fsMeasure):
-    f, t, Sxx = spectrogram(timeDataP, fsMeasure, window='blackmanharris', nperseg=256*2, noverlap=0.9, mode='magnitude')
+    f, t, Sxx = spectrogram(timeDataP, fsMeasure, window='blackmanharris', nperseg=256, noverlap=0.7, mode='magnitude')
     plt.pcolormesh(t, f, 20*np.log10(abs(Sxx)), shading='gouraud', cmap=plt.cm.viridis)
     plt.ylim((0, 850))
     plt.colorbar()
@@ -79,7 +95,8 @@ gyr0f = pulldata(gyr0)
 acc0f = pulldata(acc0)
 angf = pulldata(ang).reshape(N)
 
-vel0 = scipy.integrate.cumtrapz(acc0f, axis=0)
+vel0 = scipy.integrate.simps(acc0f, axis=0)
+disp = scipy.integrate.cumtrapz(vel0, axis=0)
 
 g = np.linalg.norm(acc0,axis=1)
 G = np.linalg.norm(acc0f,axis=1)

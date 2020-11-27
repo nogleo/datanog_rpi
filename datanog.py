@@ -1,10 +1,12 @@
 import os, gc
 from struct import unpack
-import RPi.GPIO as GPIO
+#import RPi.GPIO as GPIO
 import time
 from collections import deque
-import autograd.numpy as np
+import numpy as np
+import autograd.numpy as nap
 import scipy.optimize as op
+import scipy.integrate as intg
 import autograd
 from numpy.linalg import norm, inv
 import smbus
@@ -104,23 +106,16 @@ class DATANOG:
         # ADC config    
         #bus.write_i2c_block_data(self.bus_addr[-3], 0x01, [0x2, 0x43])
     
-    def led(self, _led = 0, _n = 1, _dur = 300, _blink = True):
-        if _blink == False:
-            GPIO.output(self.led[_led], not GPIO.input(self.led[_led]))
-        else:
-            for _i in range(_n):
-                GPIO.output(self.led[_led], 1)
-                time.sleep(_dur/1000)
-                GPIO.output(self.led[_led], 0)
-                time.sleep(_dur/1000)
+    
 
         
     def log(self, _data):
         gc.collect()      
         _filename = 'log_'+str(len(os.listdir('data')))
-        _sensname = 'imu1'
-        acc_p = np.load('./sensors/'+_sensname+'apm.npy')
-        gyr_p = np.load('./sensors/'+_sensname+'gpm.npy')        
+        _sensname = 'imu00'
+        param = np.load('./sensors/'+_sensname+'.npz')
+        acc_p = param['arr_1']
+        gyr_p = param['arr_0']       
         os.chdir('data')
         _ang = []
         _gyr0 = []
@@ -207,8 +202,6 @@ class DATANOG:
         _data = np.array(self._aux)
         self.acc_raw = _data[0:6*self._nsamp,3:6]
         self.gyr_raw = _data[:,0:3]
-        self.gyr_s = _data[0:6*self._nsamp,0:3]
-        self.gyr_r = _data[6*self._nsamp:,0:3] 
         np.save('./sensors/'+_sensor['name']+'rawdata.npy', _data)
         print(_sensor['name']+'rawdata saved')
         print('Calculating calibration parameters. Wait...')
@@ -216,8 +209,8 @@ class DATANOG:
         _sensor['acc_p'] = self.calibacc(self.acc_raw)
         gc.collect()
         _sensor['gyr_p'] = self.calibgyr(self.gyr_raw)        
-        np.save('./sensors/'+_sensor['name']+'gpm.npy', _sensor['gyr_p'])
-        np.save('./sensors/'+_sensor['name']+'apm.npy', _sensor['acc_p'])
+        np.savez('./sensors/'+_sensor['name'], _sensor['gyr_p'], _sensor['acc_p'])
+       
         os.chdir('..')
         gc.collect()
         return _sensor
@@ -234,42 +227,49 @@ class DATANOG:
 
         
         for _i in range(3):
-            _max = self.acc_m[:,i].max(0)
-            _min = self.acc_m[:,i].min(0)
-            _k[i, i] = (_max - _min)/ (2*gravity)
-            _b[i] = (_max + _min)/2    
-            _Ti[i, i-2] = np.arctan(self.acc_m[self.acc_m[:,i].argmax(0),i-2] / _max)
-            _Ti[i, i-1] = np.arctan(self.acc_m[self.acc_m[:,i].argmax(0),i-1] / _max)
+            _max = self.acc_m[:,_i].max(0)
+            _min = self.acc_m[:,_i].min(0)
+            _k[_i, _i] = (_max - _min)/ (2*self.gravity)
+            _b[_i] = (_max + _min)/2    
+            _Ti[_i, _i-2] = np.arctan(self.acc_m[self.acc_m[:,_i].argmax(0),_i-2] / _max)
+            _Ti[_i, _i-1] = np.arctan(self.acc_m[self.acc_m[:,_i].argmax(0),_i-1] / _max)
         _kT = inv(_k.dot(inv(_Ti)))
         _param = np.append(np.append(np.append(_kT.diagonal(), _b.T), _kT[np.tril(_kT, -1) != 0]), _kT[np.triu(_kT, 1) != 0])
         _jac = autograd.jacobian(self.accObj)
         _hes = autograd.hessian(self.accObj)
         _res = op.minimize(self.accObj, _param, method='trust-ncg', jac=_jac, hess=_hes)
         return _res.x
-    
-   
+  
     
     def accObj(self, X):
-        _NS = np.array([[X[0], X[6], X[7]], [X[8], X[1], X[9]], [X[10], X[11], X[2]]])
-        _b = np.array([[X[3]], [X[4]], [X[5]]])
+        _NS = nap.array([[X[0], X[6], X[7]], [X[8], X[1], X[9]], [X[10], X[11], X[2]]])
+        _b = nap.array([X[3], X[4], X[5]])
         _sum = 0
         for u in self.acc_m:
-            _sum += (self.gravity - np.linalg.norm(_NS@(u-_b.T).T))**2
+            _sum += (self.gravity - nap.linalg.norm(_NS@(u-_b).T))**2
 
         return _sum
         
     def calibgyr(self, _gyrdata):
-        _b = np.mean(self.gyr_s, axis=0).T
-        _dat = self.gyr_r - _b
-        _aux = np.zeros((3, 3))
-        for _i in range(3):
-            for _j in range(3):
-                _aux[_i, _j] = np.abs(np.sum((_dat[_i*self._gsamps:(_i+1)*self._gsamps, _j])*self.dt))
+        _gyr_s = _gyrdata[0:6*self._nsamp,:]
+        _b = np.mean(_gyr_s, axis=0).T
+        _gyr_d = _gyrdata[6*self._nsamp:,:] 
+        _gyr_r = _gyr_d - _b
+        _ang = np.zeros((3, 3))
+        for i in range(3):
+            for j in range(3):
+                _ang[i, j] = np.abs(intg.trapz(_gyr_r[self._gsamps*i:self._gsamps*(i+1), j], dx=self.dt))
+
+        _n = _ang.argmax(axis=0)
+
+        self.rates = np.zeros((self._gsamps,3))
+        for i in range(3):
+            self.rates[:,i] = _gyr_d[self._gsamps*_n[i]:self._gsamps*(_n[i]+1), i]
 
         _k = np.zeros((3,3))
-        _k[:,0] = _aux[:,_aux[0].argmax()]
-        _k[:,1] = _aux[:,_aux[1].argmax()]
-        _k[:,2] = _aux[:,_aux[2].argmax()]
+        _k[:,0] = _ang[:,_ang[0].argmax()]
+        _k[:,1] = _ang[:,_ang[1].argmax()]
+        _k[:,2] = _ang[:,_ang[2].argmax()]
 
         _kT = np.diag([90,90,90])@inv(_k)
         
@@ -279,14 +279,15 @@ class DATANOG:
         _res = op.minimize(self.gyrObj, _param, method='trust-ncg', jac=_jac, hess=_hes)
         return _res.x
     
-    def gyrObj(self, Y):
-        _NS = np.array([[Y[0], Y[6], Y[7]], [Y[8], Y[1], Y[9]], [Y[10], Y[11], Y[2]]])
-        _b = np.array([[Y[3]], [Y[4]], [Y[5]]])
-        _sum = 0
-        for _u in self.gyr_r:
-            _sum +=((_NS@(_u-_b).T)*self.dt)
-        
-        return (np.sum(self.rotation - np.abs(_sum)))**2
+    def gyrObj(self,Y):
+        _NS = nap.array([[Y[0], Y[6], Y[7]], [Y[8], Y[1], Y[9]], [Y[10], Y[11], Y[2]]])
+        _b = nap.array([Y[3], Y[4], Y[5]])
+        sum = 0
+        for u in self.rates:
+            sum += _NS@(u-_b).T*self.dt
+       
+    
+        return (90 - nap.abs(sum)).sum()**2
     
     def transl(self, _data, X):
         _NS = np.array([[X[0], X[6], X[7]], [X[8], X[1], X[9]], [X[10], X[11], X[2]]])
