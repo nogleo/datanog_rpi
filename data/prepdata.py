@@ -15,6 +15,9 @@ import scipy
 from mpl_toolkits import mplot3d
 from scipy.signal import filtfilt, butter, buttord, spectrogram, lfilter
 import pywt
+def PSD(_data):
+    _f, _dout = scipy.signal.welch(_data, nperseg=fs, fs=fs, axis=0, scaling='spectrum', average='mean',window='hann',)
+    return _dout
 
 
 fs = 3330
