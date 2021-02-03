@@ -54,17 +54,18 @@ class Ui_MainWindow(object):
 
 
 def stopcollect():
-    global state = False
+    global state
+    state = False
 
 def collect():
-    global state = True
+    global state
+    state = True
     data0 = deque()
     t0=tf = time.perf_counter()
     while state:
         ti=time.perf_counter()
         if ti-tf>=dt:
             tf = ti
-            i+=1
             data0.append(dn.pull())
 
 
