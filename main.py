@@ -71,7 +71,7 @@ def collect():
 
     t1 = time.perf_counter()
     print(t1-t0)
-    dn.lograw(data0)
+    #dn.lograw(data0)
     #dn.log(data0)
 
 if __name__ == "__main__":

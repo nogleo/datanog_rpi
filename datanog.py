@@ -161,7 +161,7 @@ class DATANOG:
 
    
     def pull(self):
-        return bus.read_i2c_block_data(self.bus_addr[-1],0x22,12)#+bus.read_i2c_block_data(self.bus_addr[-2],0x22,12)+bus.read_i2c_block_data(self.bus_addr[-3],0x0,2), bus.read_i2c_block_data(0x36,0xE,2)+
+        return bus.read_i2c_block_data(self.bus_addr[-1],0x22,12)
     
     def pullcalib(self, _addr):
         return bus.read_i2c_block_data(_addr,0x22,12)
