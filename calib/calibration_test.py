@@ -17,7 +17,7 @@ from matplotlib.pyplot import plot
 data = np.load('imu01rawdata.npy')
 # param = np.load('imu01rawdata.npy')
 
-gravity = 9.81
+gravity = 1
 fs = 3330
 dt = 1/fs
 nsamp = int(5/dt)
