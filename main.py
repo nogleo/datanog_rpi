@@ -49,8 +49,8 @@ class Ui_MainWindow(object):
         self.pushButton_5.setText(_translate("MainWindow", "Start"))
         self.actionIMU.setText(_translate("MainWindow", "IMU"))
         self.actionRotor.setText(_translate("MainWindow", "Rotor"))
-        self.pushButton_5.clicked.connect(collect())
-        self.pushButton_4.clicked.connect(stopcollect())
+        self.pushButton_5.clicked.connect(collect)
+        self.pushButton_4.clicked.connect(stopcollect)
 
 
 def stopcollect():
