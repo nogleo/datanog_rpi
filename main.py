@@ -49,10 +49,16 @@ class Ui_MainWindow(object):
         self.pushButton_5.setText(_translate("MainWindow", "Start"))
         self.actionIMU.setText(_translate("MainWindow", "IMU"))
         self.actionRotor.setText(_translate("MainWindow", "Rotor"))
+        self.pushButton_5.clicked.connect(collect())
+        self.pushButton_4.clicked.connect(stopcollect())
+
+
+def stopcollect():
+    global state = False
 
 def collect():
+    global state = True
     data0 = deque()
-    state = True
     t0=tf = time.perf_counter()
     while state:
         ti=time.perf_counter()
@@ -60,11 +66,12 @@ def collect():
             tf = ti
             i+=1
             data0.append(dn.pull())
-    
-t1 = time.perf_counter()
-print(t1-t0)
-dn.lograw(data0)
-#dn.log(data0)
+
+
+    t1 = time.perf_counter()
+    print(t1-t0)
+    dn.lograw(data0)
+    #dn.log(data0)
 
 if __name__ == "__main__":
     import sys
